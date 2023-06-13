@@ -4,6 +4,7 @@ require 'faraday'
 require 'json'
 require 'nokogiri'
 require 'smarter_csv'
+require 'uri'
 
 class Phone
   attr_reader :phone
@@ -46,18 +47,27 @@ end
 # removing contacts without valid phones
 contacts.reject! { |contact| contact.phones.empty? }
 
-contacts.sample(2).each_with_index do |contact, i|
+contacts.each_with_index do |contact, i|
   puts "(#{i + 1}/#{contacts.size}) Checking contact #{contact.name}..."
   contact.phones.each do |phone|
     puts "Checking phone #{phone.phone}..."
-    result = Faraday.new(url: 'https://www.kody.su/check-tel').post { |req| req.body = "number=#{phone.phone}" }
+    result = Faraday.post('https://www.spravportal.ru/Services/PhoneCodes/MobilePhoneInfo.aspx') do |req|
+      data = { 'ctl00$ctl00$cphMain$cphServiceMain$textNumDesktop': phone.phone,
+               '__VIEWSTATE': '/wEPDwUJMjM3NTc2NzA2ZBgBBS9jdGwwMCRjdGwwMCRjcGhNYWluJGNwaFNlcnZpY2VNYWluJG12QWRTZWxlY3Rvcg8PZAIBZDOasFzokPx73T/669/K11OOCyd1' }
+      req.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+      req.body = URI.encode_www_form(data)
+    end
     doc = Nokogiri::HTML(result.body)
-    current_provider = doc.xpath("//p[contains(text(), 'Результат распознавания номера')]/following-sibling::p[span[2]]/span[2]").text
-    previous_provider = doc.xpath('//s').text
-    puts "\tCurrent: #{current_provider}"
-    puts "\tPrevious: #{previous_provider}"
-    phone.current_provider = current_provider
-    phone.previous_provider = previous_provider
+    moved_to_operator = JSON.parse(Faraday.get("https://sp-app-proxyapi-08c.azurewebsites.net/api/mnp/#{phone.phone}").body)['movedToOperator']
+    initial_provider = doc.xpath("//div[@class='form-group' and ./label[text()='Оператор']]//span").text
+    puts "\tInitial: #{initial_provider}"
+    puts "\tMoved To: #{moved_to_operator}"
+    if moved_to_operator
+      phone.current_provider = moved_to_operator
+      phone.previous_provider = initial_provider
+    else
+      phone.current_provider = initial_provider
+    end
   end
 end
 
