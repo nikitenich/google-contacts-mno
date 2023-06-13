@@ -2,11 +2,12 @@
 
 source "https://rubygems.org"
 
-gem 'faraday'
-gem 'smarter_csv'
-gem 'nokogiri'
 gem 'activesupport'
+gem 'faraday'
+gem 'nokogiri'
+gem 'smarter_csv'
 
 group :development do
     gem 'debug'
+    gem 'rubocop'
 end
