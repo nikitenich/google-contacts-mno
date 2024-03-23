@@ -51,15 +51,17 @@ contacts.each_with_index do |contact, i|
   puts "(#{i + 1}/#{contacts.size}) Checking contact #{contact.name}..."
   contact.phones.each do |phone|
     puts "Checking phone #{phone.phone}..."
-    result = Faraday.post('https://www.spravportal.ru/Services/PhoneCodes/MobilePhoneInfo.aspx') do |req|
-      data = { 'ctl00$ctl00$cphMain$cphServiceMain$textNumDesktop': phone.phone,
-               '__VIEWSTATE': '/wEPDwUJMjM3NTc2NzA2ZBgBBS9jdGwwMCRjdGwwMCRjcGhNYWluJGNwaFNlcnZpY2VNYWluJG12QWRTZWxlY3Rvcg8PZAIBZDOasFzokPx73T/669/K11OOCyd1' }
+    result = Faraday.post('https://www.kody.su/check-tel') do |req|
+      data = { number: phone.phone }
       req.headers['Content-Type'] = 'application/x-www-form-urlencoded'
       req.body = URI.encode_www_form(data)
     end
     doc = Nokogiri::HTML(result.body)
     moved_to_operator = JSON.parse(Faraday.get("https://sp-app-proxyapi-08c.azurewebsites.net/api/mnp/#{phone.phone}").body)['movedToOperator']
-    initial_provider = doc.xpath("//div[@class='form-group' and ./label[text()='Оператор']]//span").text
+    xpath1 = "//p[text()='Результат распознавания номера:']/following-sibling::p//s"
+    xpath2 = "//p[text()='Результат распознавания номера:']/following-sibling::p[1]/span[2]"
+    initial_provider = doc.xpath(xpath1).text
+    initial_provider = doc.xpath(xpath2).text if initial_provider.nil? || initial_provider.empty?
     puts "\tInitial: #{initial_provider}"
     puts "\tMoved To: #{moved_to_operator}"
     if moved_to_operator

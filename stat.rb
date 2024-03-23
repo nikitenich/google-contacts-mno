@@ -27,12 +27,12 @@ puts "Покидаемость (количество уходов от опер�
 puts "Переходность (количество приходов к операторам): #{JSON.pretty_generate(transferred_phones_stat)}"
 
 # {'название оператора, от которого уходят' -> [операторы, к которым ушли]}
-abadoned_to_transfered_stat = transferred_phones.each_with_object({}) do |phone, hash|
+abandoned_to_transferred_stat = transferred_phones.each_with_object({}) do |phone, hash|
   hash[phone['previous_provider']] ||= []
   hash[phone['previous_provider']] << phone['current_provider']
 end
 # а теперь считаем операторов, к которым ушли 
-abadoned_to_transfered_stat.transform_values! do |value|
+abandoned_to_transferred_stat.transform_values! do |value|
   value.each_with_object(Hash.new(0)) { |carrier, hash| hash[carrier] += 1 }.sort_desc_by_value
 end
-puts "Статистика, к кому и как часто уходят от операторов (от кого -> количество тех, к кому): #{JSON.pretty_generate(abadoned_to_transfered_stat)}"
+puts "Статистика, к кому и как часто уходят от операторов (от кого -> количество тех, к кому): #{JSON.pretty_generate(abandoned_to_transferred_stat)}"
