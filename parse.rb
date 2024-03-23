@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'active_support'
 require 'active_support/core_ext'
 require 'faraday'
@@ -7,21 +9,24 @@ require 'smarter_csv'
 require 'uri'
 
 class Phone
-  attr_reader :phone
+  attr_reader :number
   attr_accessor :current_provider, :previous_provider
 
-  def initialize(phone)
-    @phone = phone
+  # @param [Integer] number
+  def initialize(number)
+    @number = number
   end
 
   def to_s
-    "#{phone}: #{previous_provider == '' ? current_provider : "#{previous_provider} -> #{current_provider}"}"
+    "#{number}: #{previous_provider == '' ? current_provider : "#{previous_provider} -> #{current_provider}"}"
   end
 end
 
 class Contact
   attr_reader :phones, :name
 
+  # @param [String] name
+  # @param [Array<Phone>] phones
   def initialize(name, phones)
     @name = name
     @phones = phones
@@ -33,7 +38,7 @@ class Contact
 end
 
 csv = SmarterCSV.process('contacts.csv')
-contacts = csv.select! { |e| e[:name] }.map do |contact|
+contacts = csv.select! { |e| e[:name] }&.map do |contact|
   keys = contact.keys.map(&:to_s).select { |key| key.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
   phones = keys.map { |k| contact[k].to_s }
   filtered_phones = phones.map { |phone| phone.split(':::') } # sometimes multiple phones presents at the same key
@@ -45,19 +50,19 @@ contacts = csv.select! { |e| e[:name] }.map do |contact|
 end
 
 # removing contacts without valid phones
-contacts.reject! { |contact| contact.phones.empty? }
+contacts&.reject! { |contact| contact.phones.empty? }
 
-contacts.each_with_index do |contact, i|
-  puts "(#{i + 1}/#{contacts.size}) Checking contact #{contact.name}..."
+contacts&.each_with_index do |contact, i|
+  puts "(#{i + 1}/#{contacts&.size}) Checking contact #{contact.name}..."
   contact.phones.each do |phone|
-    puts "Checking phone #{phone.phone}..."
+    puts "Checking phone #{phone.number}..."
     result = Faraday.post('https://www.kody.su/check-tel') do |req|
-      data = { number: phone.phone }
+      data = { number: phone.number }
       req.headers['Content-Type'] = 'application/x-www-form-urlencoded'
       req.body = URI.encode_www_form(data)
     end
     doc = Nokogiri::HTML(result.body)
-    moved_to_operator = JSON.parse(Faraday.get("https://sp-app-proxyapi-08c.azurewebsites.net/api/mnp/#{phone.phone}").body)['movedToOperator']
+    moved_to_operator = JSON.parse(Faraday.get("https://sp-app-proxyapi-08c.azurewebsites.net/api/mnp/#{phone.number}").body)['movedToOperator']
     xpath1 = "//p[text()='Результат распознавания номера:']/following-sibling::p//s"
     xpath2 = "//p[text()='Результат распознавания номера:']/following-sibling::p[1]/span[2]"
     initial_provider = doc.xpath(xpath1).text
