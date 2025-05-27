@@ -1,59 +1,48 @@
 # frozen_string_literal: true
 
-require 'active_support'
-require 'active_support/core_ext'
+require "active_support/core_ext/hash/slice"
+require 'active_support/json'
 require 'faraday'
 require 'json'
 require 'nokogiri'
 require 'smarter_csv'
 require 'uri'
 
-class Phone
-  attr_reader :number
-  attr_accessor :current_provider, :previous_provider
+SUPPORTED_CONTACT_FIELDS = %i[first_name last_name middle_name phones]
 
-  # @param [Integer] number
-  def initialize(number)
-    @number = number
-  end
-
+Phone = Struct.new(:number, :current_provider, :previous_provider, keyword_init: true) do
   def to_s
     "#{number}: #{previous_provider == '' ? current_provider : "#{previous_provider} -> #{current_provider}"}"
   end
 end
 
-class Contact
-  attr_reader :phones, :name
-
-  # @param [String] name
-  # @param [Array<Phone>] phones
-  def initialize(name, phones)
-    @name = name
-    @phones = phones
-  end
-
+Contact = Struct.new(*SUPPORTED_CONTACT_FIELDS, keyword_init: true) do
   def to_s
-    "#{name}: #{phones.map(&:to_s).join("\n")}"
+    "#{first_name} #{last_name}: #{phones.map(&:to_s).join("\n")}"
   end
 end
 
 csv = SmarterCSV.process('contacts.csv')
-contacts = csv.select! { |e| e[:name] }&.map do |contact|
-  keys = contact.keys.map(&:to_s).select { |key| key.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
-  phones = keys.map { |k| contact[k].to_s }
-  filtered_phones = phones.map { |phone| phone.split(':::') } # sometimes multiple phones presents at the same key
-                          .flatten                            # merge results
-                          .map { |e| e.scan(/\d/).join }      # remain only digits
-                          .select { |e| e.start_with?('7') }  # remove non-russian phones
-                          .map { |e| Phone.new(e.to_i) }      # create an object
-  Contact.new(contact[:name], filtered_phones)
+contacts = csv&.select! { it.keys.map(&:to_s).any? { it.include?('name') } }
+             &.map do |contact|
+  phone_keys = contact.keys.map(&:to_s).select { |key| key.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
+
+  filtered_phones = contact.slice(*phone_keys)
+                           .values
+                           .flat_map { it.to_s.split(':::') }  # sometimes multiple phones presents at the same key
+                           .map { it.scan(/\d/).join }         # remain only digits
+                           .select { it.start_with?('7') }     # remove non-russian phones
+                           .map { Phone.new(number: it.to_i) } # create an object
+  contact.merge!(phones: filtered_phones)
+  contact.slice!(*SUPPORTED_CONTACT_FIELDS)
+  Contact.new(contact)
 end
 
 # removing contacts without valid phones
 contacts&.reject! { |contact| contact.phones.empty? }
 
 contacts&.each_with_index do |contact, i|
-  puts "(#{i + 1}/#{contacts&.size}) Checking contact #{contact.name}..."
+  puts "(#{i + 1}/#{contacts&.size}) Checking contact #{contact.inspect}..."
   contact.phones.each do |phone|
     puts "Checking phone #{phone.number}..."
     result = Faraday.post('https://www.kody.su/check-tel') do |req|
@@ -63,10 +52,8 @@ contacts&.each_with_index do |contact, i|
     end
     doc = Nokogiri::HTML(result.body)
     moved_to_operator = JSON.parse(Faraday.get("https://sp-app-proxyapi-08c.azurewebsites.net/api/mnp/#{phone.number}").body)['movedToOperator']
-    xpath1 = "//p[text()='Результат распознавания номера:']/following-sibling::p//s"
-    xpath2 = "//p[text()='Результат распознавания номера:']/following-sibling::p[1]/span[2]"
-    initial_provider = doc.xpath(xpath1).text
-    initial_provider = doc.xpath(xpath2).text if initial_provider.nil? || initial_provider.empty?
+    initial_provider = doc.xpath("//p[text()='Результат распознавания номера:']/following-sibling::p//s").text
+    initial_provider = doc.xpath("//p[text()='Результат распознавания номера:']/following-sibling::p[1]/span[2]").text if initial_provider.nil? || initial_provider.empty?
     puts "\tInitial: #{initial_provider}"
     puts "\tMoved To: #{moved_to_operator}"
     if moved_to_operator
