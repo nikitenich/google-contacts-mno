@@ -29,9 +29,9 @@ contacts = csv&.select! { it.keys.map(&:to_s).any? { it.include?('name') } }
 
   filtered_phones = contact.slice(*phone_keys)
                            .values
-                           .flat_map { it.to_s.split(':::') }  # sometimes multiple phones presents at the same key
-                           .map { it.scan(/\d/).join }         # remain only digits
-                           .select { it.start_with?('7') }     # remove non-russian phones
+                           .flat_map { it.to_s.split(':::') } # sometimes multiple phones presents at the same key
+                           .map { it.scan(/\d/).join } # remain only digits
+                           .select { it.start_with?('79') } # remove non-Russian phones
                            .map { Phone.new(number: it.to_i) } # create an object
   contact.merge!(phones: filtered_phones)
   contact.slice!(*SUPPORTED_CONTACT_FIELDS)
@@ -45,15 +45,18 @@ contacts&.each_with_index do |contact, i|
   puts "(#{i + 1}/#{contacts&.size}) Checking contact #{contact.inspect}..."
   contact.phones.each do |phone|
     puts "Checking phone #{phone.number}..."
-    result = Faraday.post('https://www.kody.su/check-tel') do |req|
-      data = { number: phone.number }
+    initial_provider, moved_to_operator = Faraday.post('https://www.kody.su/embed/widget.php') do |req|
       req.headers['Content-Type'] = 'application/x-www-form-urlencoded'
-      req.body = URI.encode_www_form(data)
+      req.body = URI.encode_www_form({ number: phone.number })
+    end.then { Nokogiri::HTML(it.body) }
+       .then do
+      bdpn_result = it.xpath('//div[contains(@class, "result_bdpn")]').text
+      if bdpn_result.downcase.include?('не перенесен')
+        [it.xpath('//div[@class="result_row"]/span[preceding-sibling::img]').text, nil]
+      else
+        bdpn_result.gsub("БДПН: номер перенесен -", '').split('→').map(&:strip)
+      end
     end
-    doc = Nokogiri::HTML(result.body)
-    moved_to_operator = JSON.parse(Faraday.get("https://sp-app-proxyapi-08c.azurewebsites.net/api/mnp/#{phone.number}").body)['movedToOperator']
-    initial_provider = doc.xpath("//p[text()='Результат распознавания номера:']/following-sibling::p//s").text
-    initial_provider = doc.xpath("//p[text()='Результат распознавания номера:']/following-sibling::p[1]/span[2]").text if initial_provider.nil? || initial_provider.empty?
     puts "\tInitial: #{initial_provider}"
     puts "\tMoved To: #{moved_to_operator}"
     if moved_to_operator
