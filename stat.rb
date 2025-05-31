@@ -1,4 +1,6 @@
-module StatisticsRefinements
+# frozen_string_literal: true
+
+module StatisticsRefinements # rubocop:disable Style/Documentation
   require 'json'
 
   refine Hash do
@@ -24,7 +26,9 @@ end
 using StatisticsRefinements
 
 contacts = JSON.parse(File.read('result.json'), symbolize_names: true)
-contacts_with_transfer = contacts.select { |contact| contact[:phones].any? { |phone| phone[:previous_provider] != nil } }
+regions_statistic = contacts.flat_map { it[:phones] }
+                            .values_count_by_key(:region)
+contacts_with_transfer = contacts.select { |contact| contact[:phones].any? { |phone| !phone[:previous_provider].nil? } }
 transferred_phones = contacts_with_transfer.flat_map { |contact| contact[:phones] }
 transferred_phones_stat = transferred_phones.values_count_by_key(:current_provider)
 mostly_abandoned_stat = transferred_phones.select { |phone| phone[:previous_provider] }
@@ -44,3 +48,4 @@ abandoned_to_transferred_stat.transform_values! do |value|
   value.each_with_object(Hash.new(0)) { |carrier, hash| hash[carrier] += 1 }.sort_desc_by_value
 end
 puts "Статистика, к кому и как часто уходят от операторов (от кого -> количество тех, к кому): #{abandoned_to_transferred_stat}"
+puts "Статистика номеров по регионам: #{regions_statistic}"
