@@ -13,20 +13,20 @@ SUPPORTED_CONTACT_FIELDS = %i[first_name last_name middle_name phones].freeze
 Phone = Struct.new(:number, :region, :current_provider, :previous_provider, keyword_init: true)
 Contact = Struct.new(*SUPPORTED_CONTACT_FIELDS, keyword_init: true)
 
-contacts = SmarterCSV.process('contacts.csv').tap do |csv|
+# @type [Array<Contact>]
+contacts = SmarterCSV.process('contacts.csv').then do |csv|
   csv.select! { it.keys.map(&:to_s).any? { it.include?('name') } }
      .map do |contact|
-    phone_keys = contact.keys.map(&:to_s).select { |key| key.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
-    filtered_phones = contact.slice(*phone_keys)
-                             .values
-                             .flat_map { it.to_s.split(':::') }  # sometimes multiple phones presents at the same key
-                             .map { it.scan(/\d/).join }         # remain only digits
-                             .select { it.start_with?('79') }    # remove non-Russian phones
-                             .map { Phone.new(number: it.to_i) } # create an object
-    contact.merge!(phones: filtered_phones)
-    contact.slice!(*SUPPORTED_CONTACT_FIELDS)
-    Contact.new(contact)
-  end
+       phone_keys = contact.keys.map(&:to_s).select { it.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
+       filtered_phones = contact.fetch_values(*phone_keys)
+                                .flat_map { it.to_s.split(':::') }       # sometimes multiple phones presents at the same key
+                                .map      { it.scan(/\d/).join }         # remain only digits
+                                .select   { it.start_with?('79') }       # remove non-Russian phones
+                                .map      { Phone.new(number: it.to_i) } # create an object
+       contact.merge!(phones: filtered_phones)
+       contact.slice!(*SUPPORTED_CONTACT_FIELDS)
+       Contact.new(contact)
+    end
 end
 
 # removing contacts without valid phones
