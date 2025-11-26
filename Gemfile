@@ -2,11 +2,12 @@
 
 source 'https://rubygems.org'
 
-ruby '3.4.4'
+ruby '3.4.7'
 
 gem 'activesupport'
 gem 'faraday'
 gem 'nokogiri'
+gem 'retriable'
 gem 'smarter_csv'
 
 group :development do
