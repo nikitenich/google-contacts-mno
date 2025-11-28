@@ -62,12 +62,8 @@ contacts.each_with_index do |contact, index|
     puts "\tInitial: #{initial_provider}"
     puts "\tMoved To: #{moved_to_provider}"
     phone.region = region
-    if moved_to_provider
-      phone.current_provider = moved_to_provider
-      phone.previous_provider = initial_provider
-    else
-      phone.current_provider = initial_provider
-    end
+    phone.previous_provider = initial_provider if moved_to_provider
+    phone.current_provider = moved_to_provider || initial_provider
   end
 end
 
