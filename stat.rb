@@ -38,10 +38,11 @@ puts "Переходность (количество приходов к опе�
 
 # {'название оператора, от которого уходят' -> [операторы, к которым ушли]}
 abandoned_to_transferred_stat = transferred_phones.each_with_object({}) do |phone, hash|
-  hash[phone[:previous_provider]] ||= []
-  hash[phone[:previous_provider]] << phone[:current_provider]
+  previous_provider_name = phone[:previous_provider]
+  hash[previous_provider_name] ||= []
+  hash[previous_provider_name] << phone[:current_provider]
 end
-# а теперь считаем операторов, к которым ушли 
+# а теперь считаем операторов, к которым ушли
 abandoned_to_transferred_stat.transform_values! do |value|
   value.each_with_object(Hash.new(0)) { |carrier, hash| hash[carrier] += 1 }.sort_desc_by_value
 end

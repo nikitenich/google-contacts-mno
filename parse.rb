@@ -28,10 +28,9 @@ contacts = SmarterCSV.process('contacts.csv').then do |csv|
      .map do |contact|
       phone_keys = contact.keys.map(&:to_s).select { it.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
       filtered_phones = contact.fetch_values(*phone_keys)
-                               .flat_map { it.to_s.split(':::') }       # sometimes multiple phones presents at the same key
-                               .map      { it.scan(/\d/).join }         # remain only digits
-                               .select   { it.start_with?('79') }       # remove non-Russian phones
-                               .map      { Phone.new(number: it.to_i) } # create an object
+                               .flat_map   { it.to_s.split(':::') } # sometimes multiple phones presents at the same key
+                               .map        { it.scan(/\d/).join }   # remain only digits in phone numbers
+                               .filter_map { Phone.new(number: it.to_i) if it.start_with?('79') } # remove non-Russian phones and create an object
       contact.merge!(phones: filtered_phones)
       contact.slice!(*SUPPORTED_CONTACT_FIELDS)
       Contact.new(contact)
@@ -50,10 +49,12 @@ contacts.each_with_index do |contact, index|
                  .body
                  .then(&Nokogiri::HTML.method(:parse))
     end
-    region = response.xpath('//strong[contains(text(), "[") and contains(text(), "]")]')&.text&.scan(/\[.*?\]/)&.first[1..-2]
+    region = response.xpath('//strong[contains(text(), "[") and contains(text(), "]")]')&.text&.scan(/\[.*?\]/)&.first&.[](1..-2)
     bdpn_result = response.xpath('//div[contains(@class, "result_bdpn")]').text
     initial_provider, moved_to_provider, region = if bdpn_result.downcase.include?('не перенесен')
-                                                    [response.xpath('//div[@class="result_row"]/span[preceding-sibling::img]').text, nil, region]
+                                                    [response.xpath('//td[contains(normalize-space(), "Код сотового оператора")]//strong').text.gsub(/\[.*?\],$/, '').strip,
+                                                     nil,
+                                                     region]
                                                   else
                                                     bdpn_result.gsub('БДПН: номер перенесен -', '').split('→').map(&:strip).push(region)
                                                   end
