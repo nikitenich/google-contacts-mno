@@ -7,6 +7,7 @@ ruby '3.4.7'
 gem 'activesupport'
 gem 'faraday'
 gem 'nokogiri'
+gem 'ostruct'
 gem 'retriable'
 gem 'smarter_csv'
 

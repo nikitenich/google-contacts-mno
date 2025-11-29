@@ -23,18 +23,18 @@ KODY_SU_API = Faraday.new('https://www.kody.su/embed/widget.php') do |conn|
 end
 
 # @type [Array<Contact>]
-contacts = SmarterCSV.process('contacts.csv').then do |csv|
-  csv.select { |entry| entry.keys.map(&:to_s).any? { |key| key.include?('name') } }
+contacts = SmarterCSV::Reader.new('contacts.csv').process.then do |csv|
+  csv.select { |entry| entry.keys.any? { |key| key.to_s.include?('name') } }
      .map do |contact|
-      phone_keys = contact.keys.map(&:to_s).select { it.match?(/^phone_(\d+)___value$/) }.map(&:to_sym)
-      filtered_phones = contact.fetch_values(*phone_keys)
-                               .flat_map   { it.to_s.split(':::') } # sometimes multiple phones presents at the same key
-                               .map        { it.scan(/\d/).join }   # remain only digits in phone numbers
-                               .filter_map { Phone.new(number: it.to_i) if it.start_with?('79') } # remove non-Russian phones and create an object
-      contact.merge!(phones: filtered_phones)
-      contact.slice!(*SUPPORTED_CONTACT_FIELDS)
-      Contact.new(contact)
-    end
+       phone_keys = contact.keys.select { |key| key.to_s.match?(/^phone_(\d+)___value$/) }
+       filtered_phones = contact.fetch_values(*phone_keys)
+                                .flat_map   { it.to_s.split(':::') } # sometimes multiple phones presents at the same key
+                                .map        { it.scan(/\d/).join }   # remain only digits in phone numbers
+                                .filter_map { Phone.new(number: it.to_i) if it.start_with?('79') } # remove non-Russian phones and create an object
+       contact.merge!(phones: filtered_phones)
+       contact.slice!(*SUPPORTED_CONTACT_FIELDS)
+       Contact.new(contact)
+     end
 end
 
 # removing contacts without valid phones
