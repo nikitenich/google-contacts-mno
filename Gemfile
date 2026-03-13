@@ -2,16 +2,15 @@
 
 source 'https://rubygems.org'
 
-ruby '3.4.7'
+ruby '4.0.1'
 
 gem 'activesupport'
-gem 'faraday'
+gem 'http'
 gem 'nokogiri'
 gem 'ostruct'
-gem 'retriable'
+gem 'rake'
 gem 'smarter_csv'
 
 group :development do
-  gem 'debug'
   gem 'rubocop'
 end
