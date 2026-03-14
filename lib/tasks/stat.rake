@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'ostruct'
-
 module StatisticsRefinements # rubocop:disable Style/Documentation
   require 'json'
   require 'active_support/core_ext/enumerable'
@@ -21,27 +19,24 @@ module StatisticsRefinements # rubocop:disable Style/Documentation
   end
 end
 
-desc 'Get statistics info by MNP info'
+desc 'Get statistics by MNP info'
 task :stat do
+  require 'ostruct'
   using StatisticsRefinements
 
-  phones = JSON.parse(File.read('result.json'), object_class: OpenStruct)
+  phones = File.read('result.json')
+               .then { |file| JSON.parse(file, object_class: OpenStruct) }
                .flat_map(&:phones)
+
   puts "Статистика номеров по регионам: #{phones.values_count_by_key(:region)}"
   puts "Статистика операторов: #{phones.values_count_by_key(:current_provider)}"
 
   transferred_phones = phones.select(&:previous_provider)
-  transferred_phones_stat = transferred_phones.values_count_by_key(:current_provider)
-  mostly_abandoned_stat = transferred_phones.values_count_by_key(:previous_provider)
   puts "Количество переходных номеров: #{transferred_phones.count}/#{phones.count}"
-  puts "Покидаемость (количество уходов от операторов): #{mostly_abandoned_stat}"
-  puts "Переходность (количество приходов к операторам): #{transferred_phones_stat}"
-
-  abandoned_to_transferred_stat = transferred_phones.each_with_object({}) do |phone, hash|
-    previous_provider_name = phone.previous_provider
-    hash[previous_provider_name] ||= []
-    hash[previous_provider_name] << phone.current_provider
-  end.transform_values { |migrated_to_providers| migrated_to_providers.tally.sort_desc_by_value }
-
-  puts "Статистика, к кому и как часто уходят от операторов (от кого -> количество тех, к кому): #{abandoned_to_transferred_stat}"
+  puts "Покидаемость (количество уходов от операторов): #{transferred_phones.values_count_by_key(:previous_provider)}"
+  puts "Переходность (количество приходов к операторам): #{transferred_phones.values_count_by_key(:current_provider)}"
+  puts format('Статистика, к кому и как часто уходят от операторов (от кого -> количество тех, к кому): %s',
+              transferred_phones.group_by(&:previous_provider)
+                                .transform_values { it.map(&:current_provider).tally.sort_desc_by_value }
+                                .to_s)
 end
